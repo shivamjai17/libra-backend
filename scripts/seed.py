@@ -1,0 +1,188 @@
+"""Seed LibraDesk with the exact sample data from the design prototype.
+
+Run:  python -m scripts.seed
+Idempotent: clears existing rows for the demo library first.
+"""
+import asyncio
+from datetime import date, datetime, timedelta, timezone
+
+from sqlalchemy import delete, select
+
+from app.core.database import AsyncSessionLocal, Base, engine
+from app.core.security import hash_password
+from app.models.catalog import Batch, Hall, Plan, Seat
+from app.models.enums import (
+    AttendanceMethod, AttendanceStatus, NotificationChannel, NotificationType,
+    PaymentMethod, PaymentStatus, PlanPeriod, SeatStatus, StaffRole,
+)
+from app.models.operations import AttendanceLog, Notification, Payment
+from app.models.student import Student
+from app.models.tenant import Branch, BranchSettings, Library, Staff
+
+BRANCHES = [
+    ("Anna Nagar", "Chennai · Main"),
+    ("T. Nagar", "Chennai · South"),
+    ("Velachery", "Chennai · IT Corridor"),
+    ("Adyar", "Chennai · Coastal"),
+    ("OMR", "Chennai · Tech Park"),
+]
+
+PLANS = [
+    ("Premium", 18000, PlanPeriod.year, True),
+    ("Standard", 9000, PlanPeriod.year, True),
+    ("Day Pass", 150, PlanPeriod.day, False),
+]
+
+BATCHES = [
+    ("Morning", "06:00", "11:00", "amber"),
+    ("Afternoon", "12:00", "16:00", "blue"),
+    ("Evening", "17:00", "21:00", "purple"),
+]
+
+HALLS = [
+    ("Reading Hall A", "Ground Floor", 6, 12),
+    ("Reading Hall B", "First Floor", 5, 10),
+    ("Quiet Zone", "First Floor", 4, 8),
+    ("Computer Lab", "Second Floor", 3, 8),
+]
+
+# id, name, phone, plan, seat-code, status-hint, due, joined, batch
+STUDENTS = [
+    ("STU-2841", "Aarav Sharma", "+91 98765 43210", "Premium", "A-14", 0, "2026-01-12", "Morning"),
+    ("STU-2839", "Priya Iyer", "+91 98220 11234", "Standard", "B-7", 0, "2026-02-03", "Evening"),
+    ("STU-2835", "Vikram Singh", "+91 99001 22890", "Premium", None, 4500, "2025-03-18", "Afternoon"),
+    ("STU-2830", "Ananya Reddy", "+91 98401 55678", "Premium", "C-21", 0, "2025-11-22", "Morning"),
+    ("STU-2828", "Karthik Rao", "+91 90031 44556", "Standard", "B-19", 3200, "2026-04-09", "Evening"),
+    ("STU-2821", "Sneha Nair", "+91 99520 33421", "Standard", None, 2800, "2026-05-15", "Afternoon"),
+    ("STU-2817", "Ishaan Khan", "+91 98330 99001", "Premium", "A-2", 0, "2025-12-30", "Morning"),
+    ("STU-2810", "Diya Gupta", "+91 97411 22334", "Standard", "D-11", 0, "2026-02-11", "Evening"),
+    ("STU-2804", "Rohan Mehta", "+91 98905 67812", "Premium", None, 0, "2025-01-27", "Afternoon"),
+    ("STU-2799", "Meera Joshi", "+91 99300 45678", "Standard", "C-5", 0, "2026-03-06", "Morning"),
+    ("STU-2790", "Arjun Verma", "+91 98111 23456", "Premium", "D-3", 0, "2026-04-19", "Evening"),
+    ("STU-2785", "Kavya Menon", "+91 99887 65432", "Standard", "B-22", 1500, "2026-05-24", "Afternoon"),
+]
+
+PERIOD = {"Premium": PlanPeriod.year, "Standard": PlanPeriod.year, "Day Pass": PlanPeriod.day}
+PERIOD_DAYS = {PlanPeriod.day: 1, PlanPeriod.year: 365}
+
+
+async def seed() -> None:
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    async with AsyncSessionLocal() as db:
+        # Reset demo library if present.
+        existing = (await db.execute(select(Library).where(Library.name == "StudyHub Reading Center"))).scalar_one_or_none()
+        if existing:
+            await db.execute(delete(Library).where(Library.id == existing.id))
+            await db.flush()
+
+        lib = Library(
+            name="StudyHub Reading Center", contact_phone="+91 44 4000 1234",
+            gst_number="33ABCDE1234F1Z5", address="Anna Nagar, Chennai",
+            timezone="Asia/Kolkata", accent_color="#0f7c5a",
+        )
+        db.add(lib)
+        await db.flush()
+
+        branches = []
+        for name, area in BRANCHES:
+            b = Branch(library_id=lib.id, name=name, area=area)
+            db.add(b)
+            await db.flush()
+            db.add(BranchSettings(branch_id=b.id))
+            branches.append(b)
+        main = branches[0]
+
+        # Owner login.
+        db.add(Staff(
+            library_id=lib.id, branch_id=main.id, name="Rahul Krishnan",
+            email="owner@studyhub.in", hashed_password=hash_password("studyhub123"),
+            role=StaffRole.Owner,
+        ))
+
+        # Catalog (scoped to main branch for the demo).
+        plan_by_name = {}
+        for name, price, period, seat in PLANS:
+            p = Plan(library_id=lib.id, branch_id=main.id, name=name, price=price, period=period, seat_included=seat)
+            db.add(p)
+            await db.flush()
+            plan_by_name[name] = p
+
+        batch_by_name = {}
+        for name, start, end, color in BATCHES:
+            bt = Batch(library_id=lib.id, branch_id=main.id, name=name, start_time=start, end_time=end, color=color)
+            db.add(bt)
+            await db.flush()
+            batch_by_name[name] = bt
+
+        seat_by_code = {}
+        for name, floor, rows, cols in HALLS:
+            h = Hall(library_id=lib.id, branch_id=main.id, name=name, floor=floor, rows=rows, cols=cols)
+            db.add(h)
+            await db.flush()
+            for r in range(rows):
+                rl = chr(ord("A") + r)
+                for n in range(1, cols + 1):
+                    code = f"{rl}-{n}"
+                    s = Seat(
+                        id=f"{h.id}:{code}", code=code, hall_id=h.id,
+                        library_id=lib.id, branch_id=main.id, row=rl, number=n,
+                        status=SeatStatus.available,
+                    )
+                    db.add(s)
+                    seat_by_code.setdefault(code, s)  # first hall wins for demo seat codes
+
+        # A few reserved / maintenance seats for visual variety.
+        for code in ("A-5", "B-3", "C-9"):
+            if code in seat_by_code:
+                seat_by_code[code].status = SeatStatus.reserved
+        for code in ("E-2", "D-8"):
+            if code in seat_by_code:
+                seat_by_code[code].status = SeatStatus.maintenance
+
+        # Students.
+        for sid, name, phone, plan_name, seat_code, due, joined, batch_name in STUDENTS:
+            plan = plan_by_name[plan_name]
+            start = date.fromisoformat(joined)
+            end = start + timedelta(days=PERIOD_DAYS.get(PERIOD[plan_name], 365))
+            stu = Student(
+                id=sid, library_id=lib.id, branch_id=main.id, name=name, phone=phone,
+                plan_id=plan.id, batch_id=batch_by_name[batch_name].id,
+                due_amount=due, joined_date=start, membership_start=start, membership_end=end,
+                last_seen_at=datetime.now(timezone.utc),
+            )
+            db.add(stu)
+            await db.flush()
+            if seat_code and seat_code in seat_by_code:
+                seat = seat_by_code[seat_code]
+                seat.status = SeatStatus.occupied
+                seat.student_id = sid
+                seat.occupied_since = "9:05 AM"
+                stu.seat_id = seat.id
+                stu.hall_id = seat.hall_id
+
+        # A couple of payments + attendance + notifications for the dashboard.
+        db.add(Payment(
+            id="INV-4821", library_id=lib.id, branch_id=main.id, student_id="STU-2790",
+            plan_id=plan_by_name["Premium"].id, date=date.today(), method=PaymentMethod.UPI,
+            amount=9000, gst=1620, status=PaymentStatus.paid, description="Premium Annual renewal",
+        ))
+        db.add(AttendanceLog(
+            library_id=lib.id, branch_id=main.id, student_id="STU-2841", date=date.today(),
+            check_in_at=datetime.now(timezone.utc), method=AttendanceMethod.QR,
+            status=AttendanceStatus.inside,
+        ))
+        db.add(Notification(
+            library_id=lib.id, branch_id=main.id, student_id="STU-2790", type=NotificationType.paid,
+            channel=NotificationChannel.WhatsApp, message="Payment of ₹9,000 received. Receipt sent.",
+            sent_at=datetime.now(timezone.utc), read=False,
+        ))
+
+        await db.commit()
+        print(f"Seeded library {lib.id} with {len(STUDENTS)} students across {len(branches)} branches.")
+        print("Login:  owner@studyhub.in  /  studyhub123")
+
+
+if __name__ == "__main__":
+    asyncio.run(seed())
