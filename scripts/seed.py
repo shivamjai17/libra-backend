@@ -150,7 +150,6 @@ async def seed() -> None:
                 id=sid, library_id=lib.id, branch_id=main.id, name=name, phone=phone,
                 plan_id=plan.id, batch_id=batch_by_name[batch_name].id,
                 due_amount=due, joined_date=start, membership_start=start, membership_end=end,
-                last_seen_at=datetime.now(timezone.utc),
             )
             db.add(stu)
             await db.flush()

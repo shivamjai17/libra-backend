@@ -31,7 +31,6 @@ class Student(TenantScoped, Timestamped, Base):
     joined_date: Mapped[date] = mapped_column(Date, default=date.today)
     membership_start: Mapped[date] = mapped_column(Date, default=date.today)
     membership_end: Mapped[date | None] = mapped_column(Date)
-    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     plan: Mapped["object | None"] = relationship("Plan", lazy="joined")
     batch: Mapped["object | None"] = relationship("Batch", lazy="joined")

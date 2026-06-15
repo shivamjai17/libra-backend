@@ -44,7 +44,6 @@ def to_out(student: Student) -> StudentOut:
         joined_date=student.joined_date,
         membership_start=student.membership_start,
         membership_end=student.membership_end,
-        last_seen_at=student.last_seen_at,
         status=derive_status(student.membership_end, student.due_amount),
         plan_name=student.plan.name if student.plan else None,
         batch_name=student.batch.name if student.batch else None,

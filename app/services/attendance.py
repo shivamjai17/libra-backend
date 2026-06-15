@@ -29,7 +29,6 @@ async def check_in(
         method=method,
         status=AttendanceStatus.inside,
     )
-    student.last_seen_at = now
     db.add(log)
     await db.flush()
     return log

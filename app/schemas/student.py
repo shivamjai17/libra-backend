@@ -58,7 +58,6 @@ class StudentOut(ORMModel):
     joined_date: date
     membership_start: date
     membership_end: date | None = None
-    last_seen_at: datetime | None = None
     # derived / denormalized for the UI
     status: StudentStatus
     plan_name: str | None = None

@@ -55,19 +55,27 @@ async def get_tenant(
     The frontend sends the selected branch via the `X-Branch-Id` header
     (the branch switcher). The branch must belong to the user's library.
     """
-    branch_id = x_branch_id or user.branch_id
-    if not branch_id:
-        # Fall back to the first branch in the user's library.
+    branch = None
+
+    # 1. Try the requested branch from header
+    if x_branch_id:
+        branch = await db.get(Branch, x_branch_id)
+        if branch and branch.library_id != user.library_id:
+            raise HTTPException(status_code=403, detail="Branch not accessible")
+
+    # 2. Try the user's default branch
+    if not branch and user.branch_id:
+        branch = await db.get(Branch, user.branch_id)
+        if branch and branch.library_id != user.library_id:
+            branch = None
+
+    # 3. Fall back to the first branch in the library
+    if not branch:
         result = await db.execute(
             select(Branch).where(Branch.library_id == user.library_id).limit(1)
         )
         branch = result.scalar_one_or_none()
         if branch is None:
             raise HTTPException(status_code=400, detail="No branch available for this account")
-        branch_id = branch.id
-    else:
-        branch = await db.get(Branch, branch_id)
-        if branch is None or branch.library_id != user.library_id:
-            raise HTTPException(status_code=403, detail="Branch not accessible")
 
-    return TenantContext(user=user, library_id=user.library_id, branch_id=branch_id)
+    return TenantContext(user=user, library_id=user.library_id, branch_id=branch.id)
