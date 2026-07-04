@@ -9,7 +9,7 @@ from app.models.base import TenantScoped, Timestamped, UUIDPrimaryKey
 
 
 class Student(TenantScoped, Timestamped, Base):
-    """The member. Identified like 'STU-2841'.
+    """The member. Identified like '2841'.
 
     `status` is intentionally NOT stored — it is derived at read time from
     membership_end + due_amount (see services.student.derive_status).
@@ -17,7 +17,7 @@ class Student(TenantScoped, Timestamped, Base):
 
     __tablename__ = "students"
 
-    id: Mapped[str] = mapped_column(String(16), primary_key=True)  # "STU-####"
+    id: Mapped[str] = mapped_column(String(16), primary_key=True)  # "####"
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     phone: Mapped[str] = mapped_column(String(32), index=True)
     email: Mapped[str | None] = mapped_column(String(180))
@@ -37,7 +37,6 @@ class Student(TenantScoped, Timestamped, Base):
     documents: Mapped[list["Document"]] = relationship(
         back_populates="student", cascade="all, delete-orphan"
     )
-    notes: Mapped[list["Note"]] = relationship(back_populates="student", cascade="all, delete-orphan")
 
 
 class Document(UUIDPrimaryKey, Timestamped, Base):
@@ -50,15 +49,3 @@ class Document(UUIDPrimaryKey, Timestamped, Base):
     url: Mapped[str] = mapped_column(String(500))
 
     student: Mapped["Student"] = relationship(back_populates="documents")
-
-
-class Note(UUIDPrimaryKey, Timestamped, Base):
-    __tablename__ = "notes"
-
-    student_id: Mapped[str] = mapped_column(
-        String(16), ForeignKey("students.id", ondelete="CASCADE"), index=True
-    )
-    author: Mapped[str | None] = mapped_column(String(120))
-    body: Mapped[str] = mapped_column(Text)
-
-    student: Mapped["Student"] = relationship(back_populates="notes")

@@ -1,3 +1,4 @@
+from datetime import date
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,10 +11,16 @@ router = APIRouter(tags=["dashboard"])
 
 
 @router.get("/dashboard", response_model=DashboardOut)
-async def dashboard(ctx: TenantContext = Depends(get_tenant), db: AsyncSession = Depends(get_db)):
+async def dashboard(
+    start_date: date | None = None,
+    end_date: date | None = None,
+    ctx: TenantContext = Depends(get_tenant),
+    db: AsyncSession = Depends(get_db)
+):
     return DashboardOut(
-        kpis=Kpis(**await svc.kpis(db, ctx)),
-        widgets=DashboardWidgets(**await svc.widgets(db, ctx)),
+        kpis=Kpis(**await svc.kpis(db, ctx, start_date, end_date)),
+        widgets=DashboardWidgets(**await svc.widgets(db, ctx, start_date, end_date)),
+        revenue_trend=await svc.revenue_trend(db, ctx, start_date, end_date),
     )
 
 

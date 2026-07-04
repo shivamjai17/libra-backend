@@ -1,14 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import TenantContext, get_tenant
 from app.core.database import get_db
 from app.models.enums import StudentStatus
-from app.models.student import Document, Note, Student
+from app.models.operations import AttendanceLog, Payment
+from app.models.student import Document, Student
+from app.schemas.attendance import AttendanceOut
 from app.schemas.common import Page
+from app.schemas.payment import PaymentOut
 from app.schemas.student import (
-    DocumentOut, NoteCreate, NoteOut, StudentCreate, StudentDetail, StudentOut, StudentUpdate,
+    DocumentOut, StudentCreate, StudentDetail, StudentOut, StudentUpdate,
 )
 from app.services import students as svc
 from app.services.rules import derive_status
@@ -56,7 +60,7 @@ async def get_student(student_id: str, ctx: TenantContext = Depends(get_tenant),
     if student is None or student.branch_id != ctx.branch_id:
         raise HTTPException(404, "Student not found")
     base = svc.to_out(student).model_dump()
-    return StudentDetail(**base, documents=student.documents, notes=student.notes)
+    return StudentDetail(**base, documents=student.documents)
 
 
 @router.patch("/{student_id}", response_model=StudentOut)
@@ -70,9 +74,76 @@ async def update_student(student_id: str, payload: StudentUpdate, ctx: TenantCon
     return svc.to_out(await svc.load_one(db, student_id))
 
 
-@router.post("/{student_id}/notes", response_model=NoteOut, status_code=201)
-async def add_note(student_id: str, payload: NoteCreate, ctx: TenantContext = Depends(get_tenant), db: AsyncSession = Depends(get_db)):
-    note = Note(student_id=student_id, body=payload.body, author=payload.author or ctx.user.name)
-    db.add(note)
+@router.get("/{student_id}/payments", response_model=list[PaymentOut])
+async def student_payments(student_id: str, ctx: TenantContext = Depends(get_tenant), db: AsyncSession = Depends(get_db)):
+    student = await svc.load_one(db, student_id)
+    if student is None or student.branch_id != ctx.branch_id:
+        raise HTTPException(404, "Student not found")
+    rows = (
+        await db.execute(
+            select(Payment)
+            .where(Payment.student_id == student_id, Payment.branch_id == ctx.branch_id)
+            .order_by(Payment.date.desc())
+        )
+    ).scalars().all()
+    return rows
+
+
+@router.get("/{student_id}/attendance", response_model=list[AttendanceOut])
+async def student_attendance(student_id: str, ctx: TenantContext = Depends(get_tenant), db: AsyncSession = Depends(get_db)):
+    student = await svc.load_one(db, student_id)
+    if student is None or student.branch_id != ctx.branch_id:
+        raise HTTPException(404, "Student not found")
+    rows = (
+        await db.execute(
+            select(AttendanceLog)
+            .where(AttendanceLog.student_id == student_id, AttendanceLog.branch_id == ctx.branch_id)
+            .order_by(AttendanceLog.check_in_at.desc())
+            .limit(60)
+        )
+    ).scalars().all()
+    return rows
+
+
+class SeatAssignBody(BaseModel):
+    seat_id: str | None = None  # None = release current seat
+
+
+@router.patch("/{student_id}/seat", response_model=StudentOut)
+async def assign_student_seat(
+    student_id: str,
+    payload: SeatAssignBody,
+    ctx: TenantContext = Depends(get_tenant),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.catalog import Seat
+    from app.models.enums import SeatStatus
+
+    student = await svc.load_one(db, student_id)
+    if student is None or student.branch_id != ctx.branch_id:
+        raise HTTPException(404, "Student not found")
+
+    # Release old seat if any
+    if student.seat_id:
+        old_seat = (await db.execute(select(Seat).where(Seat.id == student.seat_id))).scalar_one_or_none()
+        if old_seat:
+            old_seat.status = SeatStatus.available
+            old_seat.student_id = None
+
+    if payload.seat_id:
+        new_seat = (
+            await db.execute(select(Seat).where(Seat.id == payload.seat_id, Seat.branch_id == ctx.branch_id))
+        ).scalar_one_or_none()
+        if new_seat is None:
+            raise HTTPException(404, "Seat not found")
+        if new_seat.status not in (SeatStatus.available,):
+            raise HTTPException(409, "Seat is not available")
+        new_seat.status = SeatStatus.occupied
+        new_seat.student_id = student_id
+        student.seat_id = payload.seat_id
+        student.hall_id = new_seat.hall_id
+    else:
+        student.seat_id = None
+
     await db.flush()
-    return note
+    return svc.to_out(await svc.load_one(db, student_id))

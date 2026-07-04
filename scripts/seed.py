@@ -48,18 +48,18 @@ HALLS = [
 
 # id, name, phone, plan, seat-code, status-hint, due, joined, batch
 STUDENTS = [
-    ("STU-2841", "Aarav Sharma", "+91 98765 43210", "Premium", "A-14", 0, "2026-01-12", "Morning"),
-    ("STU-2839", "Priya Iyer", "+91 98220 11234", "Standard", "B-7", 0, "2026-02-03", "Evening"),
-    ("STU-2835", "Vikram Singh", "+91 99001 22890", "Premium", None, 4500, "2025-03-18", "Afternoon"),
-    ("STU-2830", "Ananya Reddy", "+91 98401 55678", "Premium", "C-21", 0, "2025-11-22", "Morning"),
-    ("STU-2828", "Karthik Rao", "+91 90031 44556", "Standard", "B-19", 3200, "2026-04-09", "Evening"),
-    ("STU-2821", "Sneha Nair", "+91 99520 33421", "Standard", None, 2800, "2026-05-15", "Afternoon"),
-    ("STU-2817", "Ishaan Khan", "+91 98330 99001", "Premium", "A-2", 0, "2025-12-30", "Morning"),
-    ("STU-2810", "Diya Gupta", "+91 97411 22334", "Standard", "D-11", 0, "2026-02-11", "Evening"),
-    ("STU-2804", "Rohan Mehta", "+91 98905 67812", "Premium", None, 0, "2025-01-27", "Afternoon"),
-    ("STU-2799", "Meera Joshi", "+91 99300 45678", "Standard", "C-5", 0, "2026-03-06", "Morning"),
-    ("STU-2790", "Arjun Verma", "+91 98111 23456", "Premium", "D-3", 0, "2026-04-19", "Evening"),
-    ("STU-2785", "Kavya Menon", "+91 99887 65432", "Standard", "B-22", 1500, "2026-05-24", "Afternoon"),
+    ("2841", "Aarav Sharma", "+91 98765 43210", "Premium", "A-14", 0, "2026-01-12", "Morning"),
+    ("2839", "Priya Iyer", "+91 98220 11234", "Standard", "B-7", 0, "2026-02-03", "Evening"),
+    ("2835", "Vikram Singh", "+91 99001 22890", "Premium", None, 4500, "2025-03-18", "Afternoon"),
+    ("2830", "Ananya Reddy", "+91 98401 55678", "Premium", "C-21", 0, "2025-11-22", "Morning"),
+    ("2828", "Karthik Rao", "+91 90031 44556", "Standard", "B-19", 3200, "2026-04-09", "Evening"),
+    ("2821", "Sneha Nair", "+91 99520 33421", "Standard", None, 2800, "2026-05-15", "Afternoon"),
+    ("2817", "Ishaan Khan", "+91 98330 99001", "Premium", "A-2", 0, "2025-12-30", "Morning"),
+    ("2810", "Diya Gupta", "+91 97411 22334", "Standard", "D-11", 0, "2026-02-11", "Evening"),
+    ("2804", "Rohan Mehta", "+91 98905 67812", "Premium", None, 0, "2025-01-27", "Afternoon"),
+    ("2799", "Meera Joshi", "+91 99300 45678", "Standard", "C-5", 0, "2026-03-06", "Morning"),
+    ("2790", "Arjun Verma", "+91 98111 23456", "Premium", "D-3", 0, "2026-04-19", "Evening"),
+    ("2785", "Kavya Menon", "+91 99887 65432", "Standard", "B-22", 1500, "2026-05-24", "Afternoon"),
 ]
 
 PERIOD = {"Premium": PlanPeriod.year, "Standard": PlanPeriod.year, "Day Pass": PlanPeriod.day}
@@ -163,17 +163,17 @@ async def seed() -> None:
 
         # A couple of payments + attendance + notifications for the dashboard.
         db.add(Payment(
-            id="INV-4821", library_id=lib.id, branch_id=main.id, student_id="STU-2790",
+            id="INV-4821", library_id=lib.id, branch_id=main.id, student_id="2790",
             plan_id=plan_by_name["Premium"].id, date=date.today(), method=PaymentMethod.UPI,
             amount=9000, gst=1620, status=PaymentStatus.paid, description="Premium Annual renewal",
         ))
         db.add(AttendanceLog(
-            library_id=lib.id, branch_id=main.id, student_id="STU-2841", date=date.today(),
+            library_id=lib.id, branch_id=main.id, student_id="2841", date=date.today(),
             check_in_at=datetime.now(timezone.utc), method=AttendanceMethod.QR,
             status=AttendanceStatus.inside,
         ))
         db.add(Notification(
-            library_id=lib.id, branch_id=main.id, student_id="STU-2790", type=NotificationType.paid,
+            library_id=lib.id, branch_id=main.id, student_id="2790", type=NotificationType.paid,
             channel=NotificationChannel.WhatsApp, message="Payment of ₹9,000 received. Receipt sent.",
             sent_at=datetime.now(timezone.utc), read=False,
         ))

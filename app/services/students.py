@@ -18,13 +18,13 @@ from app.services.sequences import next_invoice_id, next_student_id
 
 
 async def load_one(db: AsyncSession, student_id: str, with_subresources: bool = False) -> Student | None:
-    """Fetch a student with plan/batch (and optionally docs/notes) eager-loaded.
+    """Fetch a student with plan/batch (and optionally docs) eager-loaded.
 
     Required because accessing relationships lazily under async raises MissingGreenlet.
     """
     opts = [selectinload(Student.plan), selectinload(Student.batch)]
     if with_subresources:
-        opts += [selectinload(Student.documents), selectinload(Student.notes)]
+        opts += [selectinload(Student.documents)]
     result = await db.execute(select(Student).options(*opts).where(Student.id == student_id))
     return result.scalar_one_or_none()
 

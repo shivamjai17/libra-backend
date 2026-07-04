@@ -10,7 +10,7 @@ async def next_student_id(db: AsyncSession, branch_id: str) -> str:
     count = await db.scalar(
         select(func.count()).select_from(Student).where(Student.branch_id == branch_id)
     )
-    return f"STU-{2800 + (count or 0) + 1}"
+    return str(2800 + (count or 0) + 1)
 
 
 async def next_invoice_id(db: AsyncSession, branch_id: str) -> str:

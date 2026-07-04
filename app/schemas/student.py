@@ -33,18 +33,6 @@ class DocumentOut(ORMModel):
     created_at: datetime
 
 
-class NoteCreate(BaseModel):
-    body: str
-    author: str | None = None
-
-
-class NoteOut(ORMModel):
-    id: str
-    author: str | None = None
-    body: str
-    created_at: datetime
-
-
 class StudentOut(ORMModel):
     id: str
     name: str
@@ -66,4 +54,3 @@ class StudentOut(ORMModel):
 
 class StudentDetail(StudentOut):
     documents: list[DocumentOut] = []
-    notes: list[NoteOut] = []

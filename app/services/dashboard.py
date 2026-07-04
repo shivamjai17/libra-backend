@@ -1,5 +1,5 @@
 """Server-side computed KPIs, widgets and analytics. Nothing is stored."""
-from datetime import date
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +21,12 @@ async def _students(db: AsyncSession, ctx: TenantContext) -> list[Student]:
     )
 
 
-async def kpis(db: AsyncSession, ctx: TenantContext) -> dict:
+async def kpis(db: AsyncSession, ctx: TenantContext, start_date: date | None = None, end_date: date | None = None) -> dict:
+    if start_date is None or end_date is None:
+        today_val = date.today()
+        start_date = start_date or date(today_val.year, today_val.month, 1)
+        end_date = end_date or today_val
+
     students = await _students(db, ctx)
     statuses = [derive_status(s.membership_end, s.due_amount) for s in students]
     total_students = len(students)
@@ -46,26 +51,33 @@ async def kpis(db: AsyncSession, ctx: TenantContext) -> dict:
     available = total_seats - occupied - reserved - maintenance
     occupancy_rate = round(occupied / total_seats, 4) if total_seats else 0.0
 
-    today = date.today()
-    today_rev = await db.scalar(
+    range_rev = await db.scalar(
         select(func.coalesce(func.sum(Payment.amount), 0)).where(
             Payment.branch_id == ctx.branch_id,
-            Payment.date == today,
+            Payment.date >= start_date,
+            Payment.date <= end_date,
             Payment.status == PaymentStatus.paid,
         )
-    )
+    ) or 0
+
+    month_start = date(end_date.year, end_date.month, 1)
     month_rev = await db.scalar(
         select(func.coalesce(func.sum(Payment.amount), 0)).where(
             Payment.branch_id == ctx.branch_id,
-            func.strftime("%Y-%m", Payment.date) == today.strftime("%Y-%m"),
+            Payment.date >= month_start,
+            Payment.date <= end_date,
             Payment.status == PaymentStatus.paid,
         )
-    )
+    ) or 0
+
     gst_collected = await db.scalar(
         select(func.coalesce(func.sum(Payment.gst), 0)).where(
-            Payment.branch_id == ctx.branch_id, Payment.status == PaymentStatus.paid
+            Payment.branch_id == ctx.branch_id,
+            Payment.date >= start_date,
+            Payment.date <= end_date,
+            Payment.status == PaymentStatus.paid,
         )
-    )
+    ) or 0
 
     pending_students = [s for s in students if s.due_amount and s.due_amount > 0]
     pending_total = sum(s.due_amount for s in pending_students)
@@ -81,34 +93,73 @@ async def kpis(db: AsyncSession, ctx: TenantContext) -> dict:
         "occupancy_rate": occupancy_rate,
         "today_attendance": att["today_total"],
         "inside_now": att["inside_now"],
-        "today_revenue": int(today_rev or 0),
-        "monthly_revenue": int(month_rev or 0),
+        "today_revenue": int(range_rev),
+        "monthly_revenue": int(month_rev),
         "pending_payments": pending_total,
         "pending_students": len(pending_students),
-        "gst_collected": int(gst_collected or 0),
+        "gst_collected": int(gst_collected),
     }
 
 
-async def widgets(db: AsyncSession, ctx: TenantContext) -> dict:
-    students = await _students(db, ctx)
-    today = date.today()
+async def widgets(db: AsyncSession, ctx: TenantContext, start_date: date | None = None, end_date: date | None = None) -> dict:
+    if start_date is None or end_date is None:
+        today_val = date.today()
+        start_date = start_date or date(today_val.year, today_val.month, 1)
+        end_date = end_date or today_val
 
-    upcoming = sorted(
-        [s for s in students if s.membership_end and s.membership_end >= today],
-        key=lambda s: s.membership_end,
-    )[:5]
-    dues = [s for s in students if s.due_amount and s.due_amount > 0][:5]
-    recent = sorted(students, key=lambda s: s.joined_date, reverse=True)[:5]
+    upcoming = (await db.execute(
+        select(Student)
+        .where(
+            Student.branch_id == ctx.branch_id,
+            Student.membership_end >= start_date,
+            Student.membership_end <= end_date + timedelta(days=30),
+        )
+        .order_by(Student.membership_end)
+        .limit(5)
+    )).scalars().all()
+
+    dues = (await db.execute(
+        select(Student)
+        .where(
+            Student.branch_id == ctx.branch_id,
+            Student.due_amount > 0
+        )
+        .order_by(Student.due_amount.desc())
+        .limit(5)
+    )).scalars().all()
+
+    recent = (await db.execute(
+        select(Student)
+        .where(
+            Student.branch_id == ctx.branch_id,
+            Student.joined_date >= start_date,
+            Student.joined_date <= end_date,
+        )
+        .order_by(Student.joined_date.desc())
+        .limit(5)
+    )).scalars().all()
 
     recent_payments = (
         await db.execute(
-            select(Payment).where(Payment.branch_id == ctx.branch_id).order_by(Payment.date.desc()).limit(5)
+            select(Payment)
+            .where(
+                Payment.branch_id == ctx.branch_id,
+                Payment.date >= start_date,
+                Payment.date <= end_date,
+            )
+            .order_by(Payment.date.desc())
+            .limit(5)
         )
     ).scalars().all()
+
     activity = (
         await db.execute(
             select(ActivityLog)
-            .where(ActivityLog.branch_id == ctx.branch_id)
+            .where(
+                ActivityLog.branch_id == ctx.branch_id,
+                func.date(ActivityLog.created_at) >= start_date,
+                func.date(ActivityLog.created_at) <= end_date,
+            )
             .order_by(ActivityLog.created_at.desc())
             .limit(8)
         )
@@ -132,6 +183,55 @@ async def widgets(db: AsyncSession, ctx: TenantContext) -> dict:
             for a in activity
         ],
     }
+
+
+async def revenue_trend(db: AsyncSession, ctx: TenantContext, start_date: date | None = None, end_date: date | None = None) -> list[dict]:
+    if start_date is None or end_date is None:
+        today_val = date.today()
+        start_date = start_date or date(today_val.year, today_val.month, 1)
+        end_date = end_date or today_val
+
+    payments = (await db.execute(
+        select(Payment)
+        .where(
+            Payment.branch_id == ctx.branch_id,
+            Payment.date >= start_date,
+            Payment.date <= end_date,
+            Payment.status == PaymentStatus.paid,
+        )
+        .order_by(Payment.date)
+    )).scalars().all()
+
+    days_diff = (end_date - start_date).days
+
+    if days_diff <= 31:
+        by_day = {}
+        curr = start_date
+        while curr <= end_date:
+            by_day[curr] = 0
+            curr += timedelta(days=1)
+        for p in payments:
+            if p.date in by_day:
+                by_day[p.date] += p.amount
+        return [{"label": d.strftime("%d %b"), "amount": amt} for d, amt in by_day.items()]
+    else:
+        by_month = {}
+        curr = start_date
+        while curr <= end_date:
+            month_key = (curr.year, curr.month)
+            by_month[month_key] = 0
+            if curr.month == 12:
+                curr = date(curr.year + 1, 1, 1)
+            else:
+                curr = date(curr.year, curr.month + 1, 1)
+        for p in payments:
+            month_key = (p.date.year, p.date.month)
+            if month_key in by_month:
+                by_month[month_key] += p.amount
+        return [
+            {"label": date(yr, mo, 1).strftime("%b %y"), "amount": amt}
+            for (yr, mo), amt in sorted(by_month.items())
+        ]
 
 
 async def analytics(db: AsyncSession, ctx: TenantContext) -> dict:

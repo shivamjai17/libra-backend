@@ -25,9 +25,15 @@ class DashboardWidgets(BaseModel):
     recent_activity: list[dict]
 
 
+class RevenueTrendPoint(BaseModel):
+    label: str
+    amount: int
+
+
 class DashboardOut(BaseModel):
     kpis: Kpis
     widgets: DashboardWidgets
+    revenue_trend: list[RevenueTrendPoint] = []
 
 
 class AnalyticsOut(BaseModel):
