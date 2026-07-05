@@ -11,3 +11,4 @@ __all__ = [
     "Payment", "AttendanceLog", "Notification", "ActivityLog",
 ]
 from app.models.inventory import Asset  # noqa: F401
+from app.models.admin import PlatformAdmin  # noqa: F401

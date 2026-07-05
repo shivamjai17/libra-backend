@@ -4,7 +4,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.models.base import Timestamped, UUIDPrimaryKey
-from app.models.enums import StaffRole
+from app.models.enums import LibraryStatus, StaffRole
 
 
 class Library(UUIDPrimaryKey, Timestamped, Base):
@@ -19,6 +19,10 @@ class Library(UUIDPrimaryKey, Timestamped, Base):
     timezone: Mapped[str] = mapped_column(String(64), default="Asia/Kolkata")
     logo_url: Mapped[str | None] = mapped_column(String(400))
     accent_color: Mapped[str] = mapped_column(String(9), default="#0f7c5a")
+    email: Mapped[str | None] = mapped_column(String(180))
+    plan: Mapped[str] = mapped_column(String(40), default="Starter")
+    owner_name: Mapped[str | None] = mapped_column(String(120))
+    status: Mapped[LibraryStatus] = mapped_column(default=LibraryStatus.pending, index=True)
 
     branches: Mapped[list["Branch"]] = relationship(back_populates="library", cascade="all, delete-orphan")
 

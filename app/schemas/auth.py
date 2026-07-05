@@ -25,3 +25,31 @@ class CurrentUser(ORMModel):
     role: str
     library_id: str
     branch_id: str | None = None
+
+
+class RegisterRequest(BaseModel):
+    institute_name: str
+    email: EmailStr
+    phone: str | None = None
+    branch: str = "Main Branch"
+    owner_name: str
+    address: str | None = None
+    plan: str = "Starter"
+    password: str
+
+
+class RegisterResponse(BaseModel):
+    library_id: str
+    status: str
+    message: str
+
+
+class AdminLoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class AdminUser(ORMModel):
+    id: str
+    name: str
+    email: EmailStr

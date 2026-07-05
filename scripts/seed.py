@@ -210,6 +210,41 @@ async def seed() -> None:
                 status=status, location=loc, unit_cost=cost, purchase_date=date(2025, 6, 1),
             ))
 
+        # Platform admin (SaaS operator) + approve the demo library.
+        from app.models.admin import PlatformAdmin
+        from app.models.enums import LibraryStatus
+        lib.status = LibraryStatus.approved
+        lib.plan = "Growth"
+        lib.owner_name = "Rahul Krishnan"
+        lib.email = "owner@studyhub.in"
+        existing_admin = (await db.execute(select(PlatformAdmin).where(PlatformAdmin.email == "admin@libradesk.com"))).scalar_one_or_none()
+        if not existing_admin:
+            db.add(PlatformAdmin(
+                name="LibraDesk Admin", email="admin@libradesk.com",
+                hashed_password=hash_password("admin123"), active=True,
+            ))
+
+        # A couple of PENDING / sample libraries so the admin console has data.
+        for iname, owner, email, phone, plan, city, st in [
+            ("Scholars Den Library", "Meera Pillai", "meera@scholarsden.in", "+91 98400 12345", "Starter", "Coimbatore", LibraryStatus.pending),
+            ("FocusHub Study Center", "Arjun Menon", "arjun@focushub.in", "+91 90030 67890", "Growth", "Madurai", LibraryStatus.pending),
+            ("QuietCorner Reading Room", "Divya Rao", "divya@quietcorner.in", "+91 99520 55221", "Starter", "Trichy", LibraryStatus.approved),
+        ]:
+            pend = Library(
+                name=iname, owner_name=owner, email=email, contact_phone=phone,
+                address=city, plan=plan, status=st, accent_color="#0f7c5a",
+            )
+            db.add(pend)
+            await db.flush()
+            pb = Branch(library_id=pend.id, name="Main Branch", area=city)
+            db.add(pb)
+            await db.flush()
+            db.add(BranchSettings(branch_id=pb.id))
+            db.add(Staff(
+                library_id=pend.id, branch_id=pb.id, name=owner, email=email,
+                hashed_password=hash_password("changeme123"), role=StaffRole.Owner, active=True,
+            ))
+
         await db.commit()
         print(f"Seeded library {lib.id} with {len(STUDENTS)} students across {len(branches)} branches.")
         print("Login:  owner@studyhub.in  /  studyhub123")

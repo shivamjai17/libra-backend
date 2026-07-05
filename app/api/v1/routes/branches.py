@@ -11,10 +11,35 @@ from app.models.enums import PaymentStatus, SeatStatus
 from app.models.operations import Payment
 from app.models.catalog import Seat
 from app.models.student import Student
-from app.models.tenant import Branch, Staff
+from app.models.tenant import Branch, BranchSettings, Staff
 from app.schemas.common import ORMModel
+from pydantic import BaseModel
 
 router = APIRouter(tags=["branches"])
+
+
+class BranchCreate(BaseModel):
+    name: str
+    area: str | None = None
+
+
+class BranchBrief(ORMModel):
+    id: str
+    name: str
+    area: str | None = None
+
+
+@router.post("/branches", response_model=BranchBrief, status_code=201)
+async def create_branch(payload: BranchCreate, ctx: TenantContext = Depends(get_tenant), db: AsyncSession = Depends(get_db)):
+    if ctx.user.role.value not in ("Owner", "Manager"):
+        from fastapi import HTTPException
+        raise HTTPException(403, "Only an owner or manager can add branches")
+    branch = Branch(library_id=ctx.library_id, name=payload.name, area=payload.area or "Branch")
+    db.add(branch)
+    await db.flush()
+    db.add(BranchSettings(branch_id=branch.id))
+    await db.commit()
+    return branch
 
 
 class BranchStat(ORMModel):

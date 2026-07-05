@@ -78,3 +78,10 @@ class AssetStatus(str, Enum):
     available = "available"
     maintenance = "maintenance"
     retired = "retired"
+
+
+class LibraryStatus(str, Enum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+    suspended = "suspended"

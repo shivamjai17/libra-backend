@@ -2,12 +2,13 @@
 from fastapi import APIRouter
 
 from app.api.v1.routes import (
-    attendance, auth, branches, catalog, dashboard, inventory, memberships,
+    admin, attendance, auth, branches, catalog, dashboard, inventory, memberships,
     notifications, payments, seats, settings, staff, students,
 )
 
 api_router = APIRouter()
 api_router.include_router(auth.router)
+api_router.include_router(admin.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(students.router)
 api_router.include_router(catalog.router)
