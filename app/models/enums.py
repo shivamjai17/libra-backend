@@ -71,3 +71,10 @@ class StaffRole(str, Enum):
     Manager = "Manager"
     FrontDesk = "FrontDesk"
     Accountant = "Accountant"
+
+
+class AssetStatus(str, Enum):
+    in_use = "in_use"
+    available = "available"
+    maintenance = "maintenance"
+    retired = "retired"

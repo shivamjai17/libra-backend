@@ -178,6 +178,38 @@ async def seed() -> None:
             sent_at=datetime.now(timezone.utc), read=False,
         ))
 
+        # Extra staff members (multiple roles) for the Staff tab.
+        for name, email, role, br_idx in [
+            ("Anita Desai", "anita@studyhub.in", StaffRole.Manager, 0),
+            ("Suresh Kumar", "suresh@studyhub.in", StaffRole.FrontDesk, 0),
+            ("Latha Raman", "latha@studyhub.in", StaffRole.Accountant, 0),
+            ("Vivek Nair", "vivek@studyhub.in", StaffRole.Manager, 1),
+        ]:
+            db.add(Staff(
+                library_id=lib.id, branch_id=branches[br_idx].id, name=name, email=email,
+                hashed_password=hash_password("changeme123"), role=role, active=True,
+            ))
+
+        # Inventory / assets for the Inventory tab.
+        from app.models.enums import AssetStatus
+        from app.models.inventory import Asset
+        for aname, cat, qty, status, loc, cost in [
+            ("Study Chairs", "Furniture", 180, AssetStatus.in_use, "All halls", 1200),
+            ("Study Tables", "Furniture", 90, AssetStatus.in_use, "All halls", 3500),
+            ("Desktop Computers", "Electronics", 24, AssetStatus.in_use, "Computer Lab", 32000),
+            ("Air Conditioners", "Electronics", 8, AssetStatus.in_use, "Ground & First Floor", 42000),
+            ("CCTV Cameras", "Security", 12, AssetStatus.in_use, "All floors", 4500),
+            ("Reading Lamps", "Furniture", 60, AssetStatus.available, "Storage", 800),
+            ("UPS Battery Backup", "Electronics", 3, AssetStatus.maintenance, "Server room", 18000),
+            ("Water Purifiers", "Appliances", 4, AssetStatus.in_use, "Each floor", 15000),
+            ("Old Projector", "Electronics", 1, AssetStatus.retired, "Storage", 22000),
+            ("Fire Extinguishers", "Security", 10, AssetStatus.in_use, "All floors", 2500),
+        ]:
+            db.add(Asset(
+                library_id=lib.id, branch_id=main.id, name=aname, category=cat, quantity=qty,
+                status=status, location=loc, unit_cost=cost, purchase_date=date(2025, 6, 1),
+            ))
+
         await db.commit()
         print(f"Seeded library {lib.id} with {len(STUDENTS)} students across {len(branches)} branches.")
         print("Login:  owner@studyhub.in  /  studyhub123")

@@ -10,3 +10,4 @@ __all__ = [
     "Student", "Document",
     "Payment", "AttendanceLog", "Notification", "ActivityLog",
 ]
+from app.models.inventory import Asset  # noqa: F401
