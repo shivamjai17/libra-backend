@@ -214,7 +214,7 @@ async def seed() -> None:
         from app.models.admin import PlatformAdmin
         from app.models.enums import LibraryStatus
         lib.status = LibraryStatus.approved
-        lib.plan = "Growth"
+        lib.plan = "Premium"
         lib.owner_name = "Rahul Krishnan"
         lib.email = "owner@studyhub.in"
         existing_admin = (await db.execute(select(PlatformAdmin).where(PlatformAdmin.email == "admin@libradesk.com"))).scalar_one_or_none()
@@ -227,7 +227,7 @@ async def seed() -> None:
         # A couple of PENDING / sample libraries so the admin console has data.
         for iname, owner, email, phone, plan, city, st in [
             ("Scholars Den Library", "Meera Pillai", "meera@scholarsden.in", "+91 98400 12345", "Starter", "Coimbatore", LibraryStatus.pending),
-            ("FocusHub Study Center", "Arjun Menon", "arjun@focushub.in", "+91 90030 67890", "Growth", "Madurai", LibraryStatus.pending),
+            ("FocusHub Study Center", "Arjun Menon", "arjun@focushub.in", "+91 90030 67890", "Premium", "Madurai", LibraryStatus.pending),
             ("QuietCorner Reading Room", "Divya Rao", "divya@quietcorner.in", "+91 99520 55221", "Starter", "Trichy", LibraryStatus.approved),
         ]:
             pend = Library(
