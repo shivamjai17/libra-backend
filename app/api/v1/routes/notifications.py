@@ -47,6 +47,25 @@ async def send_overdue_reminders(ctx: TenantContext = Depends(get_tenant), db: A
     return {"sent": sent}
 
 
+@router.post("/test-sms")
+async def test_sms(
+    payload: dict,
+    ctx: TenantContext = Depends(get_tenant),
+    db: AsyncSession = Depends(get_db),
+):
+    """Diagnostic: send a test SMS and return the exact Twilio result/error.
+
+    Body: {"phone": "9000011111", "message": "optional"}.
+    Use this to see WHY sending isn't working (not configured, trial-account
+    unverified number, DLT rejection, etc.).
+    """
+    from app.services.sms import send_sms_result
+
+    phone = (payload or {}).get("phone")
+    body = (payload or {}).get("message") or "Test SMS from Writtly. If you received this, SMS is working!"
+    return send_sms_result(phone, body)
+
+
 @router.patch("/read-all", status_code=204)
 async def read_all(ctx: TenantContext = Depends(get_tenant), db: AsyncSession = Depends(get_db)):
     await svc.mark_all_read(db, ctx)
