@@ -1,4 +1,4 @@
-"""Seed LibraDesk with the exact sample data from the design prototype.
+"""Seed Writtly with the exact sample data from the design prototype.
 
 Run:  python -m scripts.seed
 Idempotent: clears existing rows for the demo library first.
@@ -217,10 +217,10 @@ async def seed() -> None:
         lib.plan = "Premium"
         lib.owner_name = "Rahul Krishnan"
         lib.email = "owner@studyhub.in"
-        existing_admin = (await db.execute(select(PlatformAdmin).where(PlatformAdmin.email == "admin@libradesk.com"))).scalar_one_or_none()
+        existing_admin = (await db.execute(select(PlatformAdmin).where(PlatformAdmin.email == "admin@writtly.in"))).scalar_one_or_none()
         if not existing_admin:
             db.add(PlatformAdmin(
-                name="LibraDesk Admin", email="admin@libradesk.com",
+                name="Writtly Admin", email="admin@writtly.in",
                 hashed_password=hash_password("admin123"), active=True,
             ))
 

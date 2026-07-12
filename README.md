@@ -1,8 +1,8 @@
-# LibraDesk — Backend (FastAPI)
+# Writtly — Backend (FastAPI)
 
 Multi-branch study-center / library management SaaS API. Implements the data model,
 derived values, business rules, notification flow, and REST surface from
-`LibraDesk_Backend_Spec.md`.
+`Writtly_Backend_Spec.md`.
 
 ## Stack
 
