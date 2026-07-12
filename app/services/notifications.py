@@ -12,30 +12,33 @@ from app.api.v1.deps import TenantContext
 from app.models.enums import DeliveryStatus, NotificationChannel, NotificationType
 from app.models.operations import Notification
 from app.models.student import Student
+from app.models.tenant import Library
+from app.services.sms import send_sms
 
 TEMPLATES: dict[NotificationType, str] = {
     NotificationType.welcome: (
-        "Hi {name}, welcome to {org}! Your membership is now active. "
-        "Show this message at the desk to get your seat assigned."
+        "Hi {name}, welcome to {org}! Your membership is active and your seat is booked. "
+        "Come in anytime to start studying. - Team {org}"
     ),
     NotificationType.due: (
-        "Hi {name}, a friendly reminder that your membership fee{amount} is due soon. "
-        "Please pay to keep your seat active."
+        "Hi {name}, a reminder that your {org} membership fee{amount} is due soon. "
+        "Please renew to keep your seat active. - Team {org}"
     ),
     NotificationType.pending: (
-        "Hi {name}, we haven't received your pending payment{amount}. "
-        "Kindly clear it at the earliest to avoid suspension."
+        "Hi {name}, your {org} membership fee{amount} is overdue. "
+        "Kindly clear it soon to avoid losing your seat. - Team {org}"
     ),
     NotificationType.paid: (
-        "Hi {name}, we've received your payment{amount}. Thank you! Your receipt is attached."
+        "Hi {name}, we've received your payment{amount} at {org}. Thank you! "
+        "Your seat stays active. - Team {org}"
     ),
 }
 
 
 def render_template(
-    ntype: NotificationType, name: str, amount: int | None = None, org: str = "StudyHub"
+    ntype: NotificationType, name: str, amount: int | None = None, org: str = "Writtly"
 ) -> str:
-    amount_str = f" of ₹{amount:,}" if amount else ""
+    amount_str = f" of Rs {amount:,}" if amount else ""
     first = name.split(" ")[0]
     return TEMPLATES[ntype].format(name=first, amount=amount_str, org=org)
 
@@ -45,13 +48,19 @@ async def send_notification(
     ctx: TenantContext,
     student_id: str,
     ntype: NotificationType,
-    channel: NotificationChannel = NotificationChannel.WhatsApp,
+    channel: NotificationChannel = NotificationChannel.SMS,
     message: str | None = None,
     amount: int | None = None,
 ) -> Notification:
     student = await db.get(Student, student_id)
     name = student.name if student else "Student"
-    body = message or render_template(ntype, name, amount)
+    library = await db.get(Library, ctx.library_id)
+    org = library.name if library else "Writtly"
+    body = message or render_template(ntype, name, amount, org=org)
+
+    # Best-effort SMS delivery via Twilio (never blocks the flow).
+    sid = send_sms(student.phone if student else None, body)
+    status = DeliveryStatus.sent if sid else DeliveryStatus.queued
 
     notif = Notification(
         library_id=ctx.library_id,
@@ -62,11 +71,30 @@ async def send_notification(
         message=body,
         sent_at=datetime.now(timezone.utc),
         read=False,
-        delivery_status=DeliveryStatus.queued,  # advanced by provider webhook in prod
+        delivery_status=status,
     )
     db.add(notif)
     await db.flush()
     return notif
+
+
+async def send_overdue_reminders(db: AsyncSession, ctx: TenantContext) -> int:
+    """Send an overdue reminder to every student in the branch with outstanding dues.
+
+    Returns the number of reminders sent. Intended for a scheduled job (cron)
+    or the "remind all overdue" button.
+    """
+    students = (await db.execute(
+        select(Student).where(Student.branch_id == ctx.branch_id, Student.due_amount > 0)
+    )).scalars().all()
+    count = 0
+    for s in students:
+        await send_notification(
+            db, ctx, s.id, NotificationType.pending,
+            channel=NotificationChannel.SMS, amount=s.due_amount,
+        )
+        count += 1
+    return count
 
 
 async def mark_all_read(db: AsyncSession, ctx: TenantContext) -> None:

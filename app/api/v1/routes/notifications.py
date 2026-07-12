@@ -36,6 +36,17 @@ async def send(payload: NotificationCreate, ctx: TenantContext = Depends(get_ten
     )
 
 
+@router.post("/reminders/overdue")
+async def send_overdue_reminders(ctx: TenantContext = Depends(get_tenant), db: AsyncSession = Depends(get_db)):
+    """Send an SMS reminder to every student in this branch with outstanding dues.
+
+    Use from the 'Remind all overdue' button, or call on a schedule (cron) for
+    fully automatic reminders.
+    """
+    sent = await svc.send_overdue_reminders(db, ctx)
+    return {"sent": sent}
+
+
 @router.patch("/read-all", status_code=204)
 async def read_all(ctx: TenantContext = Depends(get_tenant), db: AsyncSession = Depends(get_db)):
     await svc.mark_all_read(db, ctx)

@@ -20,6 +20,17 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./libradesk.db"
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
 
+    # --- Twilio SMS (set these in .env; never commit real values) ---
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_from_number: str = ""
+    sms_enabled: bool = True          # master switch
+    sms_default_country_code: str = "+91"
+
+    @property
+    def sms_configured(self) -> bool:
+        return bool(self.twilio_account_sid and self.twilio_auth_token and self.twilio_from_number)
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
