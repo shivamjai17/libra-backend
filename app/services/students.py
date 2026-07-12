@@ -41,6 +41,7 @@ def to_out(student: Student) -> StudentOut:
         hall_id=student.hall_id,
         seat_id=student.seat_id,
         due_amount=student.due_amount,
+        active=student.active,
         joined_date=student.joined_date,
         membership_start=student.membership_start,
         membership_end=student.membership_end,
@@ -50,7 +51,30 @@ def to_out(student: Student) -> StudentOut:
     )
 
 
+async def _assert_unique_contact(
+    db: AsyncSession, ctx: TenantContext, phone: str | None, email: str | None, exclude_id: str | None = None
+) -> None:
+    """Enforce one student per phone and per email within the library."""
+    from sqlalchemy import func as _func
+
+    if phone:
+        stmt = select(Student.id).where(Student.library_id == ctx.library_id, Student.phone == phone)
+        if exclude_id:
+            stmt = stmt.where(Student.id != exclude_id)
+        if (await db.execute(stmt)).first():
+            raise HTTPException(status_code=409, detail="A student with this phone number already exists")
+    if email:
+        stmt = select(Student.id).where(
+            Student.library_id == ctx.library_id, _func.lower(Student.email) == email.lower()
+        )
+        if exclude_id:
+            stmt = stmt.where(Student.id != exclude_id)
+        if (await db.execute(stmt)).first():
+            raise HTTPException(status_code=409, detail="A student with this email already exists")
+
+
 async def onboard(db: AsyncSession, ctx: TenantContext, payload: StudentCreate) -> Student:
+    await _assert_unique_contact(db, ctx, payload.phone, payload.email)
     plan = await db.get(Plan, payload.plan_id)
     if plan is None or plan.branch_id != ctx.branch_id:
         raise HTTPException(status_code=400, detail="Invalid plan")

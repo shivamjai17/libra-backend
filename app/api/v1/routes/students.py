@@ -68,8 +68,40 @@ async def update_student(student_id: str, payload: StudentUpdate, ctx: TenantCon
     student = await svc.load_one(db, student_id)
     if student is None or student.branch_id != ctx.branch_id:
         raise HTTPException(404, "Student not found")
-    for k, v in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    # Uniqueness: don't allow a phone/email that another student already uses.
+    await svc._assert_unique_contact(
+        db, ctx, data.get("phone"), data.get("email"), exclude_id=student_id
+    )
+    for k, v in data.items():
         setattr(student, k, v)
+    await db.flush()
+    return svc.to_out(await svc.load_one(db, student_id))
+
+
+class ActiveBody(BaseModel):
+    active: bool
+
+
+@router.patch("/{student_id}/active", response_model=StudentOut)
+async def set_student_active(
+    student_id: str, payload: ActiveBody,
+    ctx: TenantContext = Depends(get_tenant), db: AsyncSession = Depends(get_db),
+):
+    """Activate / deactivate a student. Deactivating frees their seat."""
+    from app.models.catalog import Seat
+    from app.models.enums import SeatStatus
+
+    student = await svc.load_one(db, student_id)
+    if student is None or student.branch_id != ctx.branch_id:
+        raise HTTPException(404, "Student not found")
+    student.active = payload.active
+    if not payload.active and student.seat_id:
+        seat = (await db.execute(select(Seat).where(Seat.id == student.seat_id))).scalar_one_or_none()
+        if seat:
+            seat.status = SeatStatus.available
+            seat.student_id = None
+        student.seat_id = None
     await db.flush()
     return svc.to_out(await svc.load_one(db, student_id))
 

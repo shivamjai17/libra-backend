@@ -16,6 +16,15 @@ async def lifespan(app: FastAPI):
     if settings.environment == "development":
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            # Lightweight additive migration for existing SQLite dbs: add any
+            # newly-introduced columns that create_all won't add to existing tables.
+            for table, column, ddl in [
+                ("students", "active", "ALTER TABLE students ADD COLUMN active BOOLEAN DEFAULT 1"),
+            ]:
+                try:
+                    await conn.exec_driver_sql(ddl)
+                except Exception:
+                    pass  # column already exists
     yield
 
 

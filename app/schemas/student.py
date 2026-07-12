@@ -43,6 +43,7 @@ class StudentOut(ORMModel):
     hall_id: str | None = None
     seat_id: str | None = None
     due_amount: int
+    active: bool = True
     joined_date: date
     membership_start: date
     membership_end: date | None = None

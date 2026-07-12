@@ -1,7 +1,7 @@
 """Student plus per-student sub-resources (Document, Note)."""
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -28,6 +28,7 @@ class Student(TenantScoped, Timestamped, Base):
     seat_id: Mapped[str | None] = mapped_column(String(48))
 
     due_amount: Mapped[int] = mapped_column(Integer, default=0)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     joined_date: Mapped[date] = mapped_column(Date, default=date.today)
     membership_start: Mapped[date] = mapped_column(Date, default=date.today)
     membership_end: Mapped[date | None] = mapped_column(Date)
