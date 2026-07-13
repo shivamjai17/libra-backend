@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     environment: str = "development"
     debug: bool = True
     api_v1_prefix: str = "/api/v1"
+    # When true, tables are created on startup if missing (idempotent).
+    # Handy for a first boot on a fresh RDS; safe to leave on.
+    create_tables_on_startup: bool = True
 
     secret_key: str = "change-me"
     algorithm: str = "HS256"

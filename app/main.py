@@ -11,20 +11,21 @@ from app.core.database import Base, engine
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # For local/dev convenience create tables on startup.
-    # In production, use Alembic migrations instead.
-    if settings.environment == "development":
+    # Create tables on startup when enabled (idempotent — only makes missing
+    # tables). Lets a fresh RDS come up without a manual migration step.
+    if settings.environment == "development" or settings.create_tables_on_startup:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-            # Lightweight additive migration for existing SQLite dbs: add any
-            # newly-introduced columns that create_all won't add to existing tables.
-            for table, column, ddl in [
-                ("students", "active", "ALTER TABLE students ADD COLUMN active BOOLEAN DEFAULT 1"),
-            ]:
-                try:
-                    await conn.exec_driver_sql(ddl)
-                except Exception:
-                    pass  # column already exists
+            # Additive column backfill for pre-existing SQLite dev dbs only.
+            # (A fresh Postgres/RDS gets the full schema from create_all above.)
+            if conn.dialect.name == "sqlite":
+                for ddl in [
+                    "ALTER TABLE students ADD COLUMN active BOOLEAN DEFAULT 1",
+                ]:
+                    try:
+                        await conn.exec_driver_sql(ddl)
+                    except Exception:
+                        pass  # column already exists
     yield
 
 
