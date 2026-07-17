@@ -16,16 +16,30 @@ async def lifespan(app: FastAPI):
     if settings.environment == "development" or settings.create_tables_on_startup:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-            # Additive column backfill for pre-existing SQLite dev dbs only.
-            # (A fresh Postgres/RDS gets the full schema from create_all above.)
+            # Additive column backfill for tables that already exist.
+            # (create_all only creates missing tables, not missing columns.)
             if conn.dialect.name == "sqlite":
                 for ddl in [
                     "ALTER TABLE students ADD COLUMN active BOOLEAN DEFAULT 1",
+                    "ALTER TABLE payments ADD COLUMN receipt_url VARCHAR(500)",
+                    "ALTER TABLE payments ADD COLUMN receipt_token VARCHAR(24)",
                 ]:
                     try:
                         await conn.exec_driver_sql(ddl)
                     except Exception:
                         pass  # column already exists
+            else:
+                # Postgres supports IF NOT EXISTS, so these are safe to re-run.
+                for ddl in [
+                    "ALTER TABLE students ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE",
+                    "ALTER TABLE payments ADD COLUMN IF NOT EXISTS receipt_url VARCHAR(500)",
+                    "ALTER TABLE payments ADD COLUMN IF NOT EXISTS receipt_token VARCHAR(24)",
+                ]:
+                    try:
+                        await conn.exec_driver_sql(ddl)
+                    except Exception as exc:
+                        import logging
+                        logging.getLogger(__name__).warning("migration skipped: %s (%s)", ddl, exc)
     yield
 
 
@@ -46,6 +60,19 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix=settings.api_v1_prefix)
+
+# Short receipt links live at the domain root (keeps SMS short): /r/{token}
+from app.api.v1.routes import receipts as _receipts  # noqa: E402
+
+app.include_router(_receipts.router)
+
+# Serve locally-stored media in development (S3 serves it in production).
+if not settings.s3_configured:
+    import os as _os
+    from fastapi.staticfiles import StaticFiles  # noqa: E402
+
+    _os.makedirs("media", exist_ok=True)
+    app.mount("/media", StaticFiles(directory="media"), name="media")
 
 
 @app.get("/health", tags=["meta"])

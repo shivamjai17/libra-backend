@@ -36,6 +36,8 @@ class RegisterRequest(BaseModel):
     address: str | None = None
     plan: str = "Starter"
     password: str
+    # Optional data-URL/base64 logo captured during onboarding.
+    logo_base64: str | None = None
 
 
 class RegisterResponse(BaseModel):

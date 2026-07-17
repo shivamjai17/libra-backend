@@ -24,3 +24,5 @@ class PaymentOut(ORMModel):
     gst: int
     status: PaymentStatus
     description: str | None = None
+    receipt_url: str | None = None
+    receipt_token: str | None = None

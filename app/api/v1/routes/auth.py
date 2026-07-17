@@ -39,6 +39,23 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db))
     await db.flush()
     db.add(BranchSettings(branch_id=branch.id))
 
+    # Optional logo supplied at onboarding (data URL or bare base64).
+    if payload.logo_base64:
+        import base64
+        from app.services.storage import process_logo
+
+        raw_b64 = payload.logo_base64.split(",", 1)[-1]
+        try:
+            raw = base64.b64decode(raw_b64)
+            mime = "image/png"
+            if payload.logo_base64.startswith("data:"):
+                mime = payload.logo_base64.split(";", 1)[0].replace("data:", "") or "image/png"
+            url, err = process_logo(raw, mime, lib.id)
+            if url:
+                lib.logo_url = url
+        except Exception:  # noqa: BLE001 — a bad logo must not block signup
+            pass
+
     db.add(Staff(
         library_id=lib.id, branch_id=branch.id, name=payload.owner_name, email=payload.email,
         hashed_password=hash_password(payload.password), role=StaffRole.Owner, active=True,

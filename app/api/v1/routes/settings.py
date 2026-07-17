@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -52,3 +52,29 @@ async def update_payment_settings(payload: BranchSettingsUpdate, ctx: TenantCont
         setattr(row, k, v)
     await db.flush()
     return row
+
+
+@router.post("/settings/logo", response_model=LibraryOut)
+async def upload_logo(
+    file: UploadFile = File(...),
+    ctx: TenantContext = Depends(get_tenant),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload / replace the library logo (PNG, JPG or WEBP, max 2 MB).
+
+    The image is downscaled to 512px and stored; the URL is saved on the
+    library and used on receipts.
+    """
+    from app.services.storage import process_logo
+
+    raw = await file.read()
+    url, error = process_logo(raw, file.content_type or "", ctx.library_id)
+    if error:
+        raise HTTPException(400, error)
+
+    library = await db.get(Library, ctx.library_id)
+    if library is None:
+        raise HTTPException(404, "Library not found")
+    library.logo_url = url
+    await db.flush()
+    return library

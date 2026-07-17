@@ -57,10 +57,16 @@ async def collect(db: AsyncSession, ctx: TenantContext, payload: PaymentCreate) 
             detail=f"₹{payload.amount:,} · {payload.method.value}",
         )
     )
-    # Auto-send receipt notification.
-    channel = NotificationChannel.SMS if payload.method.value == "Cash" else NotificationChannel.WhatsApp
+    # Generate the receipt PDF first so the SMS can carry its link.
+    await db.flush()
+    from app.services import receipt_flow
+
+    link = await receipt_flow.generate_for_payment(db, payment)
+
+    # Auto-send receipt notification (SMS, with the receipt link when available).
     await notifications.send_notification(
-        db, ctx, payload.student_id, NotificationType.paid, channel=channel, amount=payload.amount
+        db, ctx, payload.student_id, NotificationType.paid,
+        channel=NotificationChannel.SMS, amount=payload.amount, link=link,
     )
     await db.flush()
     return payment

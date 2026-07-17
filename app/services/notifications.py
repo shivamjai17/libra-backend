@@ -28,19 +28,22 @@ TEMPLATES: dict[NotificationType, str] = {
         "Hi {name}, your {org} membership fee{amount} is overdue. "
         "Kindly clear it soon to avoid losing your seat. - Team {org}"
     ),
+    # Kept short on purpose: SMS bills per 160-char segment.
     NotificationType.paid: (
-        "Hi {name}, we've received your payment{amount} at {org}. Thank you! "
-        "Your seat stays active. - Team {org}"
+        "Hi {name}, payment{amount} received at {org}. Thank you! Receipt: {link}"
     ),
 }
 
 
 def render_template(
-    ntype: NotificationType, name: str, amount: int | None = None, org: str = "Writtly"
+    ntype: NotificationType, name: str, amount: int | None = None, org: str = "Writtly",
+    link: str | None = None,
 ) -> str:
     amount_str = f" of Rs {amount:,}" if amount else ""
     first = name.split(" ")[0]
-    return TEMPLATES[ntype].format(name=first, amount=amount_str, org=org)
+    link_str = f"{link} " if link else ""
+    body = TEMPLATES[ntype].format(name=first, amount=amount_str, org=org, link=link_str)
+    return body.replace("Receipt:  ", "").replace("Receipt: - ", "- ")
 
 
 async def send_notification(
@@ -51,12 +54,13 @@ async def send_notification(
     channel: NotificationChannel = NotificationChannel.SMS,
     message: str | None = None,
     amount: int | None = None,
+    link: str | None = None,
 ) -> Notification:
     student = await db.get(Student, student_id)
     name = student.name if student else "Student"
     library = await db.get(Library, ctx.library_id)
     org = library.name if library else "Writtly"
-    body = message or render_template(ntype, name, amount, org=org)
+    body = message or render_template(ntype, name, amount, org=org, link=link)
 
     # Best-effort SMS delivery via Twilio (never blocks the flow).
     sid = send_sms(student.phone if student else None, body)

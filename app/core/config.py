@@ -30,6 +30,18 @@ class Settings(BaseSettings):
     sms_enabled: bool = True          # master switch
     sms_default_country_code: str = "+91"
 
+    # --- S3 storage (logos + receipts) ---
+    s3_bucket: str = ""                     # e.g. writtly-assets
+    s3_region: str = "ap-south-1"
+    # Public base URL for stored files. Leave blank to use the S3 default.
+    s3_public_base_url: str = ""
+    # Public base for short receipt links, e.g. https://api.writtly.in
+    public_base_url: str = "http://localhost:8000"
+
+    @property
+    def s3_configured(self) -> bool:
+        return bool(self.s3_bucket)
+
     @property
     def sms_configured(self) -> bool:
         return bool(self.twilio_account_sid and self.twilio_auth_token and self.twilio_from_number)

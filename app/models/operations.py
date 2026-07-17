@@ -33,6 +33,8 @@ class Payment(TenantScoped, Timestamped, Base):
     gst: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[PaymentStatus] = mapped_column(default=PaymentStatus.paid, index=True)
     description: Mapped[str | None] = mapped_column(String(240))
+    receipt_url: Mapped[str | None] = mapped_column(String(500))
+    receipt_token: Mapped[str | None] = mapped_column(String(24), index=True)
 
 
 class AttendanceLog(UUIDPrimaryKey, TenantScoped, Timestamped, Base):
