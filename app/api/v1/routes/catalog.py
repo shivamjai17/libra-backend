@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import TenantContext, get_tenant
@@ -18,7 +18,9 @@ router = APIRouter(tags=["catalog"])
 # ----- Plans -----
 @router.get("/plans", response_model=list[PlanOut])
 async def list_plans(ctx: TenantContext = Depends(get_tenant), db: AsyncSession = Depends(get_db)):
-    rows = (await db.execute(select(Plan).where(Plan.branch_id == ctx.branch_id))).scalars().all()
+    rows = (await db.execute(
+        select(Plan).where(Plan.branch_id == ctx.branch_id, Plan.active.is_(True))
+    )).scalars().all()
     return rows
 
 
@@ -45,7 +47,17 @@ async def update_plan(plan_id: str, payload: PlanUpdate, ctx: TenantContext = De
 async def delete_plan(plan_id: str, ctx: TenantContext = Depends(get_tenant), db: AsyncSession = Depends(get_db)):
     plan = await db.get(Plan, plan_id)
     if plan and plan.branch_id == ctx.branch_id:
-        plan.active = False  # soft-delete: guarded because students may reference it
+        from app.models.student import Student
+
+        in_use = await db.scalar(
+            select(func.count()).select_from(Student).where(Student.plan_id == plan_id)
+        )
+        if in_use:
+            # Students reference this plan — keep the row (for their history)
+            # but hide it from the list.
+            plan.active = False
+        else:
+            await db.delete(plan)
         await db.flush()
 
 
