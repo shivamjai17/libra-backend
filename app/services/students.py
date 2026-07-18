@@ -75,14 +75,21 @@ async def _assert_unique_contact(
 
 async def onboard(db: AsyncSession, ctx: TenantContext, payload: StudentCreate) -> Student:
     await _assert_unique_contact(db, ctx, payload.phone, payload.email)
-    plan = await db.get(Plan, payload.plan_id)
-    if plan is None or plan.branch_id != ctx.branch_id:
-        raise HTTPException(status_code=400, detail="Invalid plan")
-    batch = await db.get(Batch, payload.batch_id)
-    if batch is None or batch.branch_id != ctx.branch_id:
-        raise HTTPException(status_code=400, detail="Invalid batch")
 
-    period = payload.duration or plan.period
+    # Plan and batch are optional (a brand-new institute may not have set any up
+    # yet). If provided, they must be valid for this branch.
+    plan = None
+    if payload.plan_id:
+        plan = await db.get(Plan, payload.plan_id)
+        if plan is None or plan.branch_id != ctx.branch_id:
+            raise HTTPException(status_code=400, detail="Invalid plan")
+    batch = None
+    if payload.batch_id:
+        batch = await db.get(Batch, payload.batch_id)
+        if batch is None or batch.branch_id != ctx.branch_id:
+            raise HTTPException(status_code=400, detail="Invalid batch")
+
+    period = payload.duration or (plan.period if plan else None)
     start = date.today()
     sid = await next_student_id(db, ctx.branch_id)
 
@@ -93,19 +100,20 @@ async def onboard(db: AsyncSession, ctx: TenantContext, payload: StudentCreate) 
         name=payload.name,
         phone=payload.phone,
         email=payload.email,
-        plan_id=plan.id,
-        batch_id=batch.id,
+        plan_id=plan.id if plan else None,
+        batch_id=batch.id if batch else None,
         hall_id=payload.hall_id,
         due_amount=0,
         joined_date=start,
         membership_start=start,
-        membership_end=membership_end(start, period),
+        # No plan/duration -> no fixed end date (membership_end stays null).
+        membership_end=membership_end(start, period) if period else None,
     )
     db.add(student)
     await db.flush()
 
-    # Allocate a seat if the plan includes one.
-    if plan.seat_included and payload.hall_id:
+    # Allocate a seat only if a plan includes one.
+    if plan and plan.seat_included and payload.hall_id:
         seat_id = payload.seat_id
         if not seat_id:
             free = (
@@ -129,17 +137,21 @@ async def onboard(db: AsyncSession, ctx: TenantContext, payload: StudentCreate) 
             library_id=ctx.library_id,
             branch_id=ctx.branch_id,
             student_id=student.id,
-            plan_id=plan.id,
+            plan_id=plan.id if plan else None,
             date=start,
             method=PaymentMethod.UPI,
             amount=payload.initial_payment,
             gst=gst,
             status=PaymentStatus.paid,
-            description=f"{plan.name} signup",
+            description=f"{plan.name} signup" if plan else "Signup payment",
         )
         db.add(invoice)
 
     # Audit + welcome notification (auto-trigger).
+    detail = student.name
+    if plan or batch:
+        parts = [p for p in [plan.name if plan else None, f"{batch.name} batch" if batch else None] if p]
+        detail = " · ".join(parts)
     db.add(
         ActivityLog(
             library_id=ctx.library_id,
@@ -147,7 +159,7 @@ async def onboard(db: AsyncSession, ctx: TenantContext, payload: StudentCreate) 
             actor=ctx.user.name,
             action="student.created",
             subject=student.name,
-            detail=f"{plan.name} · {batch.name} batch",
+            detail=detail,
         )
     )
     await notifications.send_notification(

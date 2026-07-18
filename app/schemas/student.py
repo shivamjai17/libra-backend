@@ -10,8 +10,8 @@ class StudentCreate(BaseModel):
     name: str
     phone: str
     email: EmailStr | None = None
-    plan_id: str
-    batch_id: str
+    plan_id: str | None = None
+    batch_id: str | None = None
     hall_id: str | None = None
     seat_id: str | None = None  # if omitted and plan.seat_included, auto-assign
     duration: PlanPeriod | None = None  # overrides plan.period if provided
