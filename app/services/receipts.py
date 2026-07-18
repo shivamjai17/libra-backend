@@ -1,4 +1,4 @@
-"""GST-compliant payment receipt PDF (A5 portrait), rendered with ReportLab.
+"""GST-compliant tax invoice PDF (A5 portrait), rendered with ReportLab.
 
 Layout: library logo + name/address/GSTIN header, receipt meta, student and
 plan details, an amount table with CGST/SGST split, and a footer note.
@@ -84,7 +84,7 @@ def build_receipt_pdf(
     c.rect(0, y, W, 9 * mm, fill=1, stroke=0)
     c.setFillColor(colors.white)
     c.setFont("Helvetica-Bold", 9)
-    c.drawString(14 * mm, y + 3 * mm, "PAYMENT RECEIPT")
+    c.drawString(14 * mm, y + 3 * mm, "INVOICE")
     c.setFont("Helvetica", 8)
     c.drawRightString(W - 14 * mm, y + 3 * mm, f"{receipt_no}  |  {receipt_date.strftime('%d %b %Y')}")
 
@@ -142,7 +142,7 @@ def build_receipt_pdf(
     # ---- Footer ----
     c.setFillColor(MUTED)
     c.setFont("Helvetica", 6.8)
-    c.drawCentredString(W / 2, 16 * mm, "This is a computer generated receipt and does not require a signature.")
+    c.drawCentredString(W / 2, 16 * mm, "This is a computer generated invoice and does not require a signature.")
     c.drawCentredString(W / 2, 12 * mm, f"Powered by Writtly  |  {library_name}")
 
     c.showPage()

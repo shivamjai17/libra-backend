@@ -120,10 +120,11 @@ async def onboard(db: AsyncSession, ctx: TenantContext, payload: StudentCreate) 
             await seats.assign(db, ctx, seat_id, student.id)
 
     # Initial payment at signup (if any).
+    invoice = None
     if payload.initial_payment:
         gst_rate = 18.0
         gst = compute_gst(payload.initial_payment, gst_rate)
-        inv = Payment(
+        invoice = Payment(
             id=await next_invoice_id(db, ctx.branch_id),
             library_id=ctx.library_id,
             branch_id=ctx.branch_id,
@@ -136,7 +137,7 @@ async def onboard(db: AsyncSession, ctx: TenantContext, payload: StudentCreate) 
             status=PaymentStatus.paid,
             description=f"{plan.name} signup",
         )
-        db.add(inv)
+        db.add(invoice)
 
     # Audit + welcome notification (auto-trigger).
     db.add(
@@ -152,5 +153,18 @@ async def onboard(db: AsyncSession, ctx: TenantContext, payload: StudentCreate) 
     await notifications.send_notification(
         db, ctx, student.id, NotificationType.welcome
     )
+
+    # If they paid at signup, produce the invoice PDF and text them the link too.
+    if invoice is not None:
+        await db.flush()
+        from app.models.enums import NotificationChannel
+        from app.services import receipt_flow
+
+        link = await receipt_flow.generate_for_payment(db, invoice)
+        await notifications.send_notification(
+            db, ctx, student.id, NotificationType.paid,
+            channel=NotificationChannel.SMS, amount=invoice.amount, link=link,
+        )
+
     await db.flush()
     return await load_one(db, student.id)

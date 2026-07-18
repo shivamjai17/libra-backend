@@ -25,12 +25,20 @@ async def _gst_rate(db: AsyncSession, ctx: TenantContext) -> float:
 
 async def collect(db: AsyncSession, ctx: TenantContext, payload: PaymentCreate) -> Payment:
     gst = compute_gst(payload.amount, await _gst_rate(db, ctx))
+
+    # Fall back to the student's current plan so the receipt always shows one.
+    from app.models.student import Student as _Student
+
+    plan_id = payload.plan_id
+    if not plan_id:
+        _s = await db.get(_Student, payload.student_id)
+        plan_id = _s.plan_id if _s else None
     payment = Payment(
         id=await next_invoice_id(db, ctx.branch_id),
         library_id=ctx.library_id,
         branch_id=ctx.branch_id,
         student_id=payload.student_id,
-        plan_id=payload.plan_id,
+        plan_id=plan_id,
         date=date.today(),
         method=payload.method,
         amount=payload.amount,
