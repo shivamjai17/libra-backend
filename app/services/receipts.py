@@ -40,6 +40,7 @@ def build_receipt_pdf(
     period: str | None,
     amount: int,
     gst: int,
+    gst_rate: float = 18.0,
     method: str,
     accent: str = "#0f7c5a",
 ) -> bytes:
@@ -118,11 +119,19 @@ def build_receipt_pdf(
 
     taxable = max(0, amount - gst)
     half_gst = gst / 2
-    money_rows = [
-        ("Taxable value", _rupees(taxable), False),
-        ("CGST (9%)", _rupees(half_gst), False),
-        ("SGST (9%)", _rupees(half_gst), False),
-    ]
+    half_rate = (gst_rate / 2) if gst_rate else 0
+    if gst > 0:
+        money_rows = [
+            ("Taxable value", _rupees(taxable), False),
+            (f"CGST ({half_rate:g}%)", _rupees(half_gst), False),
+            (f"SGST ({half_rate:g}%)", _rupees(half_gst), False),
+        ]
+    else:
+        # No GST configured — show a clean single line, no tax split.
+        money_rows = [
+            ("Amount", _rupees(amount), False),
+            ("GST", "Not applicable", False),
+        ]
     for label, value, _bold in money_rows:
         c.setFillColor(MUTED)
         c.setFont("Helvetica", 8.5)

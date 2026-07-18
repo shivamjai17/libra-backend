@@ -55,6 +55,7 @@ async def generate_for_payment(db: AsyncSession, payment: Payment) -> str | None
             period=period,
             amount=payment.amount,
             gst=payment.gst or 0,
+            gst_rate=(round((payment.gst or 0) / payment.amount * 100) if payment.amount else 0),
             method=payment.method.value,
             accent=(library.accent_color if library and library.accent_color else "#0f7c5a"),
         )

@@ -130,7 +130,9 @@ async def onboard(db: AsyncSession, ctx: TenantContext, payload: StudentCreate) 
     # Initial payment at signup (if any).
     invoice = None
     if payload.initial_payment:
-        gst_rate = 18.0
+        from app.services.payments import _gst_rate
+
+        gst_rate = await _gst_rate(db, ctx)
         gst = compute_gst(payload.initial_payment, gst_rate)
         invoice = Payment(
             id=await next_invoice_id(db, ctx.branch_id),

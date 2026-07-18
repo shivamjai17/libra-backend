@@ -20,7 +20,9 @@ async def _gst_rate(db: AsyncSession, ctx: TenantContext) -> float:
     row = (
         await db.execute(select(BranchSettings).where(BranchSettings.branch_id == ctx.branch_id))
     ).scalar_one_or_none()
-    return float(row.gst_rate_pct) if row else 18.0
+    if row is None or row.gst_rate_pct is None:
+        return 18.0
+    return float(row.gst_rate_pct)
 
 
 async def collect(db: AsyncSession, ctx: TenantContext, payload: PaymentCreate) -> Payment:
